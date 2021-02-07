@@ -4,7 +4,13 @@
 \alias{varmer}
 \title{Variational merging}
 \usage{
-varmer(uhat.img, v.img, eta_0, color_plot)
+varmer(
+  uhat.img,
+  v.img,
+  eta_0,
+  color_plot = grDevices::heat.colors,
+  create_plots = F
+)
 }
 \arguments{
 \item{uhat.img}{The interpolated image as a raster.}
@@ -14,6 +20,8 @@ varmer(uhat.img, v.img, eta_0, color_plot)
 \item{eta_0}{A scalar}
 
 \item{color_plot}{The name of a palette of color from grDevices}
+
+\item{create_plots}{Flag defining whether plots are to be created}
 }
 \value{
 Three 3D plots corresponding to the variation of U, uhat and v in the space.

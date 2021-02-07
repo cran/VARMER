@@ -1,0 +1,129 @@
+---
+title: <center>Tutorial for merging a WRF output (maximum temperature) with ground observations using `VARMER`</center>
+author: 
+- Jacinto Ulloa^[jacintoisrael.ulloa@kuleuven.be]
+- Esteban Samaniego^[esteban.samaniego@ucuenca.edu.ec]
+- Lenin Campozano^[lenin.campozano@epn.edu.ec]
+- Daniela Ballari^[dballari@uazuay.edu.ec]
+- Leandro Robaina^[rm537lra@gmail.com]
+- Ronald Gualán^[ronald.gualan@ucuenca.edu.ec]
+date: <center>`r format(Sys.time(), '%d %B %Y')`</center>
+output: 
+  pdf_document:
+    number_sections: true
+vignette: >
+  %\VignetteIndexEntry{Tutorial for merging a WRF output (maximum temperature) with ground observations using `VARMER`}
+  %\VignetteEngine{knitr::rmarkdown}
+  \usepackage[utf8]{inputenc}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+# About
+This vignette describes a basic application of the `VARMER` library, which provides methods to combine satellite-based or model-based gridded images with ground-based observed time-series [1].
+
+# Installation
+
+Install the latest stable version (from CRAN):
+
+```{r Install_Stable, eval = FALSE}
+install.packages("VARMER")
+```
+
+# Setting up the environment
+
+1. Load other packages that will be used in this analysis and `VARMER`:
+
+```{r Loading_other_pks, eval = TRUE, message=FALSE}
+library(zoo)
+library(sf)
+library(raster)
+library(tictoc)
+library(cluster)
+library(parallel)
+#library(ggplot2)
+library(VARMER)
+```
+
+# Loading input data
+
+First, daily time series of maximum temperature observations in 34 stations located in Ecuador will be used for this example, from *2004-01-01* to *2004-01-10*, which are available in the **ecuador.tmax.zoo** dataset provided in the `VARMER` package (for your own application, this dataset might be read from a CSV file or a `zoo` file). In addition, the **ecuador.tmax.stations.df** dataset contains information about the IDs and spatial coordinates of each station (for your own application, this dataset might be read from a CSV file). 
+   
+```{r Loading_GroundObservarions, eval = TRUE}
+data(ecuador.tmax.zoo)
+data(ecuador.tmax.stations.df)
+```
+
+Secondly, we need to load the WRF output. For this example, the model-data was obtained from a WRF v3.6.1 simulation at 10Km spatial resolution and at daily temporal resolution. 
+
+   
+```{r LoadingSatelliteData, eval = TRUE}
+data(ecuador.tmax.wrf.out)
+```
+
+# Basic exploratory data analysis
+
+First, we would like to visualize the first six rows of the spatial metadata:
+
+```{r ExploringMetadata}
+head(ecuador.tmax.stations.df)
+```
+
+Plotting the daily precipitation time series for the first station (code: *M0001*).
+
+```{r PlottingPts, fig.width = 7, fig.height = 3.5, fig.align = "center", message=FALSE}
+main <- paste("Daily maximum temperature for the station", ecuador.tmax.stations.df$CODIGO[1])
+ylab <- "Maximum temperature [°C]"
+x.ts <- ecuador.tmax.zoo[,1]
+
+plot(x.ts, main=main, ylab= ylab, col="blue")
+grid()
+```
+
+Plotting the average maximum temperature from WRF output, and overlying the boundaries of the study area (only its first attribute):
+
+```{r PlotingTotalP, fig.width= 4, fig.height = 4, fig.align = "center", message=FALSE}
+wrfout.total <- mean(ecuador.tmax.wrf.out, na.rm=FALSE)
+
+plot(wrfout.total, main = "WRF output [Jan-2004] ", xlab = "Longitude", ylab = "Latitude")
+```
+
+# Running `VARMER`
+
+## Setup
+
+Finally, you need to define the output directory (`drty.out`) before running `VARMER`. Then, you can run the `varmer.ts` function as follows:
+
+```{r, eval = FALSE}
+varmer.ts(x=ecuador.tmax.zoo, x.metadata=ecuador.tmax.stations.df,
+          v=ecuador.tmax.wrf.out, lat='LAT', lon='LON',
+          drty.out="~/Documentos/dataset_ecuador")
+```
+
+\newpage
+
+## Expected outputs
+
+If `VARMER` runs without problems, the final merged product (individual *GeoTiff* files) will be stored in your user-defined `drty.out` directory.
+
+
+# Software details
+
+This tutorial was built under: 
+
+```{r SoftwareDetails, echo=FALSE, eval = TRUE}
+sessionInfo()$platform
+sessionInfo()$R.version$version.string 
+paste("VARMER", sessionInfo()$otherPkgs$VARMER$Version)
+```
+
+
+# References
+
+1. Ulloa, J., Samaniego, E., Campozano, L., & Ballari, D. (2018). A variational merging approach to the spatial description of environmental variables. Journal of Geophysical Research: Atmospheres, 123. https://doi.org/10.1002/2017JD027982.
+

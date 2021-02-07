@@ -1,0 +1,164 @@
+---
+title: <center>Tutorial for merging a satellite-based precipitation product with ground observations using `VARMER`</center>
+author: 
+- Jacinto Ulloa^[jacintoisrael.ulloa@kuleuven.be]
+- Esteban Samaniego^[esteban.samaniego@ucuenca.edu.ec]
+- Lenin Campozano^[lenin.campozano@epn.edu.ec]
+- Daniela Ballari^[dballari@uazuay.edu.ec]
+- Leandro Robaina^[rm537lra@gmail.com]
+- Ronald Gualán^[ronald.gualan@ucuenca.edu.ec]
+date: <center>`r format(Sys.time(), '%d %B %Y')`</center>
+output: 
+  pdf_document:
+    number_sections: true
+vignette: >
+  %\VignetteIndexEntry{Tutorial for merging a satellite-based precipitation product with ground observations using `VARMER`}
+  %\VignetteEngine{knitr::rmarkdown}
+  \usepackage[utf8]{inputenc}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+
+# About
+This vignette describes a basic application of the `VARMER` library, which provides methods to combine satellite-based or model-based gridded images with ground-based observed time-series [1].
+
+We use part of the Valparaiso (Chile) case study provided by the package `RFmerge` [2,3]. This dataset includes products at daily temporal scale and at $0.05^\circ$ spatial resolution, from January to August 1983 (243 days).  The Valparaiso dataset includes the following resources:
+
+  1) time series of rainfall observations, 
+    
+  2) metadata describing the spatial coordinates of the rain gauges,
+    
+  3) the Climate Hazards Group InfraRed Precipitation with Station data version 2.0 (CHIRPSv2),
+    
+  4) the Precipitation Estimation from Remotely Sensed Information using Artificial Neural Networks - Climate Data Record (PERSIANN-CDR), and
+    
+  5) the Shuttle Radar Topography Mission (SRTM-v4) digital elevation model (DEM). 
+  
+`RFmerge` requires 5 resources to create a final product. `VARMER`, on the other hand, requieres only 2. `VARMER` applies a Variational Merging Approach, which makes it a simpler approach requiring only two inputs: a gridded image (which provides the global spatial structure) and the ground-based observations (which provides the fidelity term). 
+
+# Installation
+
+Install the latest stable version (from CRAN):
+
+```{r Install_Stable, eval = FALSE}
+install.packages("VARMER")
+```
+
+# Setting up the environment
+
+1. Load other packages that will be used in this analysis and `VARMER`:
+
+```{r Loading_other_pks, eval = TRUE, message=FALSE}
+library(zoo)
+library(sf)
+library(raster)
+library(RFmerge)
+library(tictoc)
+library(cluster)
+#library(ggplot2)
+library(parallel)
+library(VARMER)
+```
+
+# Loading input data
+
+First, daily time series of rainfall observations in 34 rain gauges located in Valparaiso will be used for this example, from *1983-01-01* to *1983-08-31*, which are available in the **ValparaisoPPts** dataset provided in the `RFmerge` package (for your own application, this dataset might be read from a CSV file or a `zoo` file). In addition, the **ValparaisoPPgis** dataset contains information about the IDs and spatial coordinates of each one of the rain gauges (for your own application, this dataset might be read from a CSV file). Finally, **ValparaisoSHP** stores the `sf` polygon defining the outer borders of the study area (for your own application, this dataset might be read from an ESRI shapefile).
+  
+   
+```{r Loading_GroundObservarions, eval = TRUE}
+data(ValparaisoPPts)    
+data(ValparaisoPPgis) 
+data(ValparaisoSHP)  
+```
+
+Secondly, we need to load the satellite-based precipitation dataset. Following the `RFmerge` example, CHIRPSv2 [4] at a spatial resolution of $0.05^\circ$ is used to provide the global spatial structure. 
+
+   
+```{r LoadingSatelliteData, eval = TRUE}
+chirps.fname   <- system.file("extdata/CHIRPS5km.tif", package="RFmerge")
+CHIRPS5km <- brick(chirps.fname)
+```
+
+# Basic exploratory data analysis
+
+The multi-band geotiff (CHIRPS) provided in the `RFmerge` package do not store the date of the precipitation estimate as name of the corresponding layer. Therefore, before any exploratory analysis, we would give meaningful names to each band (layer) in `CHIRPS5km`:
+
+```{r GivingMeaninfulNamesToLayers, eval = TRUE}
+ldates                <- seq(from=as.Date("1983-01-01"), to=as.Date("1983-08-31"), by="days")
+names(CHIRPS5km)      <- ldates
+```
+
+Then, we want to visualize the first six rows of the spatial metadata:
+
+```{r ExploringMetadata}
+head(ValparaisoPPgis)
+```
+
+Plotting the daily precipitation time series for the first station (code: *P5101005*).
+
+```{r PlottingPts, fig.width = 7, fig.height = 3.5, fig.align = "center", message=FALSE}
+main <- paste("Daily precipitation for the station", ValparaisoPPgis$Code[1])
+ylab <- "Precipitation [mm]"
+x.ts <- ValparaisoPPts[,1]
+
+plot(x.ts, main=main, ylab= ylab, col="blue")
+grid()
+```
+
+
+Plotting the accumulated precipitation estimates for the first eight months of 1983 from CHIRPS, and overlying the boundaries of the study area (only its first attribute):
+
+```{r PlotingTotalP, fig.width= 4, fig.height = 4, fig.align = "center", message=FALSE}
+chirps.total   <- sum(CHIRPS5km, na.rm= FALSE)
+
+plot(chirps.total, main = "CHIRPSv2 [Jan - Aug] ", xlab = "Longitude", ylab = "Latitude")
+plot(ValparaisoSHP[1], add=TRUE, col="transparent")
+```
+
+
+# Running `VARMER`
+
+## Setup
+
+Finally, you need to define the output directory (`drty.out`) before running `VARMER`. Then, you can run the `varmer.ts` function as follows:
+
+```{r RFmergeWithoutParallelisation, eval = FALSE}
+varmer.ts(x=ValparaisoPPts, x.metadata=ValparaisoPPgis,
+          v=CHIRPS5km, lat='lat', lon='lon',
+          drty.out="~/Documentos/dataset_valparaiso/")
+```
+
+\newpage
+
+## Expected outputs
+
+If `VARMER` runs without problems, the final merged product (individual *GeoTiff* files) will be stored in your user-defined `drty.out` directory.
+
+
+# Software details
+
+This tutorial was built under: 
+
+```{r SoftwareDetails, echo=FALSE, eval = TRUE}
+sessionInfo()$platform
+sessionInfo()$R.version$version.string 
+paste("VARMER", sessionInfo()$otherPkgs$VARMER$Version)
+```
+
+
+# References
+
+1. Ulloa, J., Samaniego, E., Campozano, L., & Ballari, D. (2018). A variational merging approach to the spatial description of environmental variables. Journal of Geophysical Research: Atmospheres, 123. https://doi.org/10.1002/2017JD027982.
+
+2. Zambrano-Bigiarini, M.; Baez-Villanueva O.M.; Giraldo-Osorio, J. (2020). RFmerge: Merging of Satellite Datasets with Ground Observations using Random Forests. R package version 0.1-10. URL  https://cran.r-project.org/package=RFmerge. DOI:10.5281/zenodo.3581515.
+
+3. Baez-Villanueva, O. M.; Zambrano-Bigiarini, M.; Beck, H.; McNamara, I.;   Ribbe, L.; Nauditt, A.; Birkel, C.; Verbist, K.; Giraldo-Osorio, J.D.;   Thinh, N.X. (2020). RF-MEP: a novel Random Forest method for merging gridded precipitation products and ground-based measurements, Remote Sensing of Environment, 239, 111610. doi10.1016/j.rse.2019.111606.
+
+4. Funk, C., Peterson, P., Landsfeld, M., Pedreros, D., Verdin, J., Shukla, S., Husak, G., Rowland, J., Harrison, L., Hoell, A., and Michaelsen,
+J. (2015) The climate hazards infrared precipitation with stations-a new environmental record for monitoring extremes, Sci Data, 2, 150 066, doi:10.1038/sdata.2015.66.
